@@ -33,6 +33,19 @@ pub struct JsonBackend {
 }
 
 impl StorageBackend for JsonBackend {
+    fn spawn(&mut self) -> Entity {
+        let entity = Entity::new();
+        self.state
+            .entities
+            .insert(entity, InternalJsonEntity::default());
+
+        entity
+    }
+
+    fn entities(&self) -> Vec<Entity> {
+        self.state.entities.keys().cloned().collect()
+    }
+
     fn update<T: Component>(&mut self, component: ComponentStorage<T>) -> T {
         let serialized_component = serde_json::to_value(component.component).unwrap();
 
@@ -50,32 +63,6 @@ impl StorageBackend for JsonBackend {
             .unwrap();
 
         serde_json::from_value(old_component).unwrap()
-    }
-
-    fn get<T: Component>(&self, entity: Entity) -> ComponentStorage<T> {
-        let component = self
-            .state
-            .entities
-            .get(&entity)
-            .unwrap()
-            .components
-            .iter()
-            .find(|c| find_component::<T>(c))
-            .unwrap();
-
-        ComponentStorage {
-            entity,
-            component: serde_json::from_value(component.inner.clone()).unwrap(),
-        }
-    }
-
-    fn spawn(&mut self) -> Entity {
-        let entity = Entity::new();
-        self.state
-            .entities
-            .insert(entity, InternalJsonEntity::default());
-
-        entity
     }
 
     fn insert<T: Component>(&mut self, entity: Entity, component: T) -> ComponentStorage<T> {
@@ -104,6 +91,20 @@ impl StorageBackend for JsonBackend {
             .position(|c| find_component::<T>(c))
             .unwrap();
         serde_json::from_value(entity.components.remove(index).inner).unwrap()
+    }
+
+    fn get<T: Component>(&self, entity: Entity) -> Option<ComponentStorage<T>> {
+        self.state
+            .entities
+            .get(&entity)
+            .unwrap()
+            .components
+            .iter()
+            .find(|c| find_component::<T>(c))
+            .map(|component| ComponentStorage {
+                entity,
+                component: serde_json::from_value(component.inner.clone()).unwrap(),
+            })
     }
 }
 

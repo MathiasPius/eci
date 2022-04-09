@@ -86,16 +86,19 @@ where
         component
     }
 
-    fn get<T: Component>(&self, entity: eci_core::Entity) -> ComponentStorage<T> {
-        let component = self.backend.get(entity);
-        component
+    fn get<T: Component>(&self, entity: eci_core::Entity) -> Option<ComponentStorage<T>> {
+        self.backend.get(entity)
+    }
+
+    fn entities(&self) -> Vec<eci_core::Entity> {
+        self.backend.entities()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use eci_backend_json::{Json, JsonBackend};
-    use eci_core::{component::DebugString, World};
+    use eci_core::{component::DebugString, query::Queryable, World};
 
     use crate::FileBackend;
 
@@ -104,7 +107,7 @@ mod tests {
         let backing_file = tempfile::NamedTempFile::new().unwrap();
 
         // This tests boostrapping a new file-backed world.
-        let entity = {
+        {
             // Configure a Json-formatted FileBackend
             let new_backend = FileBackend::new(JsonBackend::default(), backing_file.path(), Json);
 
@@ -116,8 +119,8 @@ mod tests {
                 .insert(DebugString {
                     content: "Hello world!".to_string(),
                 })
-                .id()
-        };
+                .id();
+        }
 
         // This tests that the world was properly saved
         {
@@ -125,9 +128,8 @@ mod tests {
                 FileBackend::<JsonBackend, Json>::load(backing_file.path()).unwrap();
             let world = World::new(reuse_backend);
 
-            let debug_str = world.get::<DebugString>(entity);
+            let debug_str = world.query::<DebugString, ()>().iter().pop().unwrap();
             assert_eq!(debug_str.content, "Hello world!");
-            
             println!("{:?}", debug_str);
         }
     }

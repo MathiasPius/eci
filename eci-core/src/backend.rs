@@ -33,10 +33,11 @@ where
 
 pub trait StorageBackend {
     fn spawn(&mut self) -> Entity;
+    fn entities(&self) -> Vec<Entity>;
     fn update<T: Component>(&mut self, component: ComponentStorage<T>) -> T;
     fn insert<T: Component>(&mut self, entity: Entity, component: T) -> ComponentStorage<T>;
     fn remove<T: Component>(&mut self, entity: Entity) -> T;
-    fn get<T: Component>(&self, entity: Entity) -> ComponentStorage<T>;
+    fn get<T: Component>(&self, entity: Entity) -> Option<ComponentStorage<T>>;
 }
 
 pub trait Format: Debug {

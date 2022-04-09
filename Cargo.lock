@@ -45,6 +45,7 @@ dependencies = [
 name = "eci-core"
 version = "0.1.0"
 dependencies = [
+ "eci-backend-json",
  "semver",
  "serde",
  "uuid",
