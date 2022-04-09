@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "eci",
+    "eci-core",
+    "eci-backend-json",
+    "eci-backend-file"
+]
+
+default-members = ["eci"]
