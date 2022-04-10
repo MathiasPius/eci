@@ -4,8 +4,6 @@ use uuid::Uuid;
 use crate::{
     backend::StorageBackend,
     component::Component,
-    query::{Fetch, Queryable},
-    Query,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -64,11 +62,5 @@ impl<'world, B: StorageBackend> EntityBuilder<'world, B> {
 
     pub fn id(self) -> Entity {
         self.entity
-    }
-}
-
-impl<B: StorageBackend> Queryable for World<B> {
-    fn query<'world, Select: Fetch, Where>(&'world self) -> Query<Select, Where> {
-        Query::in_world(&self.backend)
     }
 }

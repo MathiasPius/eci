@@ -12,4 +12,3 @@ uuid = { version = "0.8.2", features = ["v4", "serde"] }
 
 
 [dev-dependencies]
-eci-backend-json = { path = "../eci-backend-json" }

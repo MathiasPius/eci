@@ -1,14 +1,8 @@
 [package]
-name = "eci-backend-file"
+name = "eci-backend-sqlite"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eci-core = { path = "../eci-core" }
-
-
-[dev-dependencies]
-eci-backend-json = { path = "../eci-backend-json" }
-tempfile = "3.3.0"

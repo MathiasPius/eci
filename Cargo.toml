@@ -2,8 +2,7 @@
 members = [
     "eci",
     "eci-core",
-    "eci-backend-json",
-    "eci-backend-file"
+    "eci-backend-sqlite",
 ]
 
 default-members = ["eci"]

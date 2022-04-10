@@ -7,5 +7,3 @@ edition = "2021"
 
 [dependencies]
 eci-core = { path = "../eci-core" }
-eci-backend-json = { path = "../eci-backend-json" }
-eci-backend-file = { path = "../eci-backend-file" }
