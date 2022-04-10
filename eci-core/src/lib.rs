@@ -2,8 +2,8 @@ pub mod backend;
 pub mod component;
 pub mod query;
 pub mod world;
+pub mod entity;
 
 pub use component::Component;
 pub use semver::Version;
-pub use world::Entity;
-pub use world::World;
+pub use entity::Entity;

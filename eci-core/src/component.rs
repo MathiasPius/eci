@@ -1,7 +1,6 @@
 use crate::Version;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-pub trait Component: Serialize + DeserializeOwned {
+pub trait Component {
     const NAME: &'static str;
     const VERSION: Version;
 
@@ -14,7 +13,7 @@ pub trait Component: Serialize + DeserializeOwned {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct DebugString {
     pub content: String,
 }
