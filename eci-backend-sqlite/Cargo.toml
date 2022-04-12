@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 eci-core = { path = "../eci-core" }
+eci-format-json = { path = "../eci-format-json" }
 # Utilities
 chrono = { version = "0.4.19", features = ["serde"] }
 uuid = { version = "0.8.2", features = ["v4"] }

@@ -26,8 +26,19 @@ impl AccessBackend for SqliteBackend {
                 ":contents": serialized_contents,
             };
 
+            // TODO: Should not be creating the table at this point in time but whatever.
+            tx.execute_batch(&format!(
+                "
+            create table if not exists {name} (
+                entity   text not null unique,
+                version  text not null,
+                contents blob not null
+            );"
+            ))
+            .map_err(AccessError::implementation)?;
+
             if tx.execute(&format!(
-                "INSERT INTO {name} (entity, version, contents) VALUES(:entity, :version, :contents)"
+                "insert into {name} (entity, version, contents) values(:entity, :version, :contents)"
             ), params).map_err(AccessError::implementation)? != 1 {
                 return Err(AccessError::Conflict(
                     entity,
@@ -39,5 +50,57 @@ impl AccessBackend for SqliteBackend {
 
         tx.commit().map_err(AccessError::implementation)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use eci_core::{
+        backend::AccessBackend,
+        component::{DebugComponentA, DebugComponentB},
+        Entity,
+    };
+    use eci_format_json::Json;
+
+    use crate::SqliteBackend;
+
+    #[test]
+    fn insert_disparate_components() {
+        let conn = SqliteBackend::in_memory().unwrap();
+
+        let entity = Entity::new();
+
+        conn.write_components::<Json, (DebugComponentA, DebugComponentB)>(
+            entity,
+            (
+                DebugComponentA {
+                    content: Some("Hello".to_string()),
+                },
+                DebugComponentB {
+                    content: Some("World".to_string()),
+                },
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn fail_on_duplicate_components() {
+        let conn = SqliteBackend::in_memory().unwrap();
+
+        let entity = Entity::new();
+
+        conn.write_components::<Json, (DebugComponentA, DebugComponentA)>(
+            entity,
+            (
+                DebugComponentA {
+                    content: Some("Hello".to_string()),
+                },
+                DebugComponentA {
+                    content: Some("World".to_string()),
+                },
+            ),
+        )
+        .unwrap_err();
     }
 }
