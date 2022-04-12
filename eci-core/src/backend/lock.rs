@@ -22,7 +22,7 @@ impl Display for LockingMode {
 #[derive(Debug)]
 pub enum LockingError {
     Implementation(Box<dyn Error>),
-    Conflict(&'static str, Version, LockingMode),
+    Conflict(Entity, &'static str, Version, LockingMode),
 }
 
 impl Display for LockingError {
@@ -31,9 +31,9 @@ impl Display for LockingError {
             LockingError::Implementation(inner) => {
                 write!(f, "error while acquiring lock: {}", inner)
             }
-            LockingError::Conflict(component, version, mode) => write!(
+            LockingError::Conflict(entity, component, version, mode) => write!(
                 f,
-                "conflicting lock for {component} ({version}) while acquiring {mode} lock"
+                "conflicting lock for {entity}'s {component} ({version}) while acquiring {mode} lock"
             ),
         }
     }

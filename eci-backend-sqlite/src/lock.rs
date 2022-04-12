@@ -81,6 +81,7 @@ impl LockingBackend for SqliteBackend {
                 != 1
             {
                 return Err(LockingError::Conflict(
+                    entity,
                     descriptor.name,
                     descriptor.version,
                     descriptor.mode,
@@ -171,8 +172,13 @@ mod tests {
             conn.acquire_lock::<&mut DebugComponentA>(entity)
                 .unwrap_err()
                 .to_string(),
-            LockingError::Conflict("DebugComponentA", Version::new(1, 0, 0), LockingMode::Write)
-                .to_string()
+            LockingError::Conflict(
+                entity,
+                "DebugComponentA",
+                Version::new(1, 0, 0),
+                LockingMode::Write
+            )
+            .to_string()
         );
     }
 
@@ -200,8 +206,13 @@ mod tests {
             conn.acquire_lock::<&mut DebugComponentA>(entity)
                 .unwrap_err()
                 .to_string(),
-            LockingError::Conflict("DebugComponentA", Version::new(1, 0, 0), LockingMode::Write)
-                .to_string()
+            LockingError::Conflict(
+                entity,
+                "DebugComponentA",
+                Version::new(1, 0, 0),
+                LockingMode::Write
+            )
+            .to_string()
         );
     }
 
@@ -217,8 +228,13 @@ mod tests {
             conn.acquire_lock::<&DebugComponentA>(entity)
                 .unwrap_err()
                 .to_string(),
-            LockingError::Conflict("DebugComponentA", Version::new(1, 0, 0), LockingMode::Read)
-                .to_string()
+            LockingError::Conflict(
+                entity,
+                "DebugComponentA",
+                Version::new(1, 0, 0),
+                LockingMode::Read
+            )
+            .to_string()
         );
     }
 }

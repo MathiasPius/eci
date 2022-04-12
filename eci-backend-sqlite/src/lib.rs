@@ -1,3 +1,4 @@
+mod access;
 mod lock;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;

@@ -3,6 +3,7 @@ members = [
     "eci",
     "eci-core",
     "eci-backend-sqlite",
+    "eci-format-json",
 ]
 
 default-members = ["eci"]
