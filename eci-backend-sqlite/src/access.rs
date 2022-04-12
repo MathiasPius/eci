@@ -27,7 +27,7 @@ impl AccessBackend for SqliteBackend {
             };
 
             if tx.execute(&format!(
-                "INSERT INTO {name} (entity, version, component) VALUES(:entity, :version, :component)"
+                "INSERT INTO {name} (entity, version, contents) VALUES(:entity, :version, :contents)"
             ), params).map_err(AccessError::implementation)? != 1 {
                 return Err(AccessError::Conflict(
                     entity,
