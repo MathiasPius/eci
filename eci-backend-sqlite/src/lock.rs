@@ -50,6 +50,7 @@ impl LockingBackend for SqliteBackend {
     fn acquire_lock<T: ToLockDescriptor>(
         &self,
         entity: eci_core::Entity,
+        expires_in: std::time::Duration,
     ) -> Result<Self::Lock, LockingError> {
         let lockid = Uuid::new_v4();
 
@@ -64,7 +65,7 @@ impl LockingBackend for SqliteBackend {
                 ":entity": entity.to_string(),
                 ":component": descriptor.name,
                 ":version": descriptor.version.to_string(),
-                ":expires": Utc::now() + Duration::hours(1),
+                ":expires": Utc::now() + Duration::from_std(expires_in).map_err(LockingError::implementation)?,
             };
 
             debug!(
@@ -143,6 +144,7 @@ mod tests {
     };
 
     use crate::SqliteBackend;
+    const LOCK_TIME: std::time::Duration = std::time::Duration::from_secs(60);
 
     #[test]
     fn test_acquire_locking() {
@@ -150,7 +152,7 @@ mod tests {
 
         let entity = Entity::new();
 
-        conn.acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity)
+        conn.acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
             .unwrap();
     }
 
@@ -161,13 +163,13 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity)
+            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
             .unwrap();
         let _b = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity)
+            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
             .unwrap();
         let _c = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity)
+            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
             .unwrap();
     }
 
@@ -177,10 +179,12 @@ mod tests {
 
         let entity = Entity::new();
 
-        let _a = conn.acquire_lock::<&mut DebugComponentA>(entity).unwrap();
+        let _a = conn
+            .acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
+            .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&mut DebugComponentA>(entity)
+            conn.acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
                 .unwrap_err()
                 .to_string(),
             LockingError::Conflict(
@@ -200,9 +204,11 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<(&mut DebugComponentA, &mut DebugComponentB)>(entity)
+            .acquire_lock::<(&mut DebugComponentA, &mut DebugComponentB)>(entity, LOCK_TIME)
             .unwrap();
-        let _b = conn.acquire_lock::<&mut DebugComponentC>(entity).unwrap();
+        let _b = conn
+            .acquire_lock::<&mut DebugComponentC>(entity, LOCK_TIME)
+            .unwrap();
     }
 
     #[test]
@@ -211,10 +217,12 @@ mod tests {
 
         let entity = Entity::new();
 
-        let _a = conn.acquire_lock::<&DebugComponentA>(entity).unwrap();
+        let _a = conn
+            .acquire_lock::<&DebugComponentA>(entity, LOCK_TIME)
+            .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&mut DebugComponentA>(entity)
+            conn.acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
                 .unwrap_err()
                 .to_string(),
             LockingError::Conflict(
@@ -233,10 +241,12 @@ mod tests {
 
         let entity = Entity::new();
 
-        let _a = conn.acquire_lock::<&mut DebugComponentA>(entity).unwrap();
+        let _a = conn
+            .acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
+            .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&DebugComponentA>(entity)
+            conn.acquire_lock::<&DebugComponentA>(entity, LOCK_TIME)
                 .unwrap_err()
                 .to_string(),
             LockingError::Conflict(

@@ -50,8 +50,11 @@ impl LockingError {
 pub trait LockingBackend {
     type Lock;
 
-    fn acquire_lock<T: ToLockDescriptor>(&self, entity: Entity)
-        -> Result<Self::Lock, LockingError>;
+    fn acquire_lock<T: ToLockDescriptor>(
+        &self,
+        entity: Entity,
+        expires_in: std::time::Duration,
+    ) -> Result<Self::Lock, LockingError>;
     fn release_lock(&self, lock: Self::Lock) -> Result<(), LockingError>;
 }
 
