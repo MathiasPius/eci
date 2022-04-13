@@ -1,6 +1,9 @@
-use eci_core::backend::{
-    AccessBackend, AccessError, Format, FromSerializedComponent, SerializedComponent,
-    ToSerializedComponent,
+use eci_core::{
+    backend::{
+        AccessBackend, AccessError, ExtractionDescriptor, Format, FromSerializedComponent,
+        SerializedComponent, ToSerializedComponent,
+    },
+    Version,
 };
 use rusqlite::named_params;
 
@@ -65,37 +68,47 @@ impl AccessBackend for SqliteBackend {
 
         let mut components = Vec::new();
         for descriptor in T::to_component_descriptor() {
-            let name = descriptor.name;
+            components.push(match descriptor {
+                // If the descriptor is for an entity, we just put an empty
+                // serialized component in there. When T::from_serialized_component
+                // is run, it just ignores the SerializedComponent structure entirely
+                // and passes on the input entity.
+                ExtractionDescriptor::Entity => SerializedComponent::<F> {
+                    contents: F::Data::from(vec![]),
+                    name: "",
+                    version: Version::new(1, 0, 0),
+                },
+                ExtractionDescriptor::Component(descriptor) => {
+                    let name = descriptor.name;
 
-            let params = named_params! {
-                ":entity": entity.to_string(),
-                ":version": descriptor.version.to_string(),
-            };
+                    let params = named_params! {
+                        ":entity": entity.to_string(),
+                        ":version": descriptor.version.to_string(),
+                    };
 
-            let result = tx
-                .query_row(
-                    &format!(
-                        "
-                select contents from {name} 
-                where entity = :entity
-                and version = :version
-            "
-                    ),
-                    params,
-                    |row| {
-                        Ok(SerializedComponent::<F> {
-                            contents: F::Data::from(row.get(0)?),
-                            name,
-                            version: descriptor.version,
-                        })
-                    },
-                )
-                .map_err(AccessError::implementation)?;
-
-            components.push(result);
+                    tx.query_row(
+                        &format!(
+                            "
+                    select contents from {name} 
+                    where entity = :entity
+                    and version = :version
+                "
+                        ),
+                        params,
+                        |row| {
+                            Ok(SerializedComponent::<F> {
+                                contents: F::Data::from(row.get(0)?),
+                                name,
+                                version: descriptor.version,
+                            })
+                        },
+                    )
+                    .map_err(AccessError::implementation)?
+                }
+            });
         }
 
-        T::from_serialized_components(components.as_slice())
+        T::from_serialized_components(entity, components.as_slice())
     }
 }
 
@@ -175,5 +188,49 @@ mod tests {
         assert_eq!(comps, input_components);
 
         println!("{:#?}", comps);
+    }
+
+    #[test]
+    fn read_same_component_twice() {
+        // While not exactly useful, there's no real reason why you shouldn't be allowed to
+        // read the same component twice within a single query
+        let conn = SqliteBackend::in_memory().unwrap();
+        let entity = Entity::new();
+
+        let input_components = DebugComponentA {
+            content: Some("Hello".to_string()),
+        };
+
+        conn.write_components::<Json, DebugComponentA>(entity, input_components.clone())
+            .unwrap();
+
+        let comps: (DebugComponentA, DebugComponentA) = conn
+            .read_components::<Json, (DebugComponentA, DebugComponentA)>(entity)
+            .unwrap();
+
+        assert_eq!(comps.0, input_components);
+        assert_eq!(comps.1, input_components);
+
+        println!("{:#?}", comps);
+    }
+
+    #[test]
+    fn read_entity_as_component() {
+        let conn = SqliteBackend::in_memory().unwrap();
+        let entity = Entity::new();
+
+        let component = DebugComponentA {
+            content: Some("Hello".to_string()),
+        };
+
+        conn.write_components::<Json, DebugComponentA>(entity, component.clone())
+            .unwrap();
+
+        let comps: (Entity, DebugComponentA) = conn
+            .read_components::<Json, (Entity, DebugComponentA)>(entity)
+            .unwrap();
+
+        assert_eq!(entity, comps.0);
+        assert_eq!(component, comps.1);
     }
 }
