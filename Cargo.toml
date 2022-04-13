@@ -4,6 +4,8 @@ members = [
     "eci-core",
     "eci-backend-sqlite",
     "eci-format-json",
+    "eci-derive",
+    "eci-query",
 ]
 
 default-members = ["eci"]
