@@ -25,3 +25,28 @@ impl Display for Json {
         write!(f, "json")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use eci_core::backend::Format;
+    use serde::{Deserialize, Serialize};
+
+    use crate::Json;
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    struct TestStruct {
+        content: String,
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let component = TestStruct {
+            content: "Hello world!".to_string(),
+        };
+
+        let serialized = Json::serialize(component.clone()).unwrap();
+        let deserialized: TestStruct = Json::deserialize(&serialized).unwrap();
+
+        assert_eq!(deserialized, component);
+    }
+}
