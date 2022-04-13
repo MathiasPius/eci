@@ -114,12 +114,24 @@ impl AccessBackend for SqliteBackend {
 
 #[cfg(test)]
 mod tests {
-    use eci_core::{
-        backend::AccessBackend,
-        component::{DebugComponentA, DebugComponentB},
-        Entity,
-    };
+    use eci_core::{backend::AccessBackend, Component, Entity};
     use eci_format_json::Json;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    struct DebugComponentA {
+        content: String,
+    }
+
+    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    struct DebugComponentB {
+        content: String,
+    }
+
+    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    struct DebugComponentC {
+        content: String,
+    }
 
     use crate::SqliteBackend;
 
@@ -132,10 +144,10 @@ mod tests {
             entity,
             (
                 DebugComponentA {
-                    content: Some("Hello".to_string()),
+                    content: "Hello".to_string(),
                 },
                 DebugComponentB {
-                    content: Some("World".to_string()),
+                    content: "World".to_string(),
                 },
             ),
         )
@@ -151,10 +163,10 @@ mod tests {
             entity,
             (
                 DebugComponentA {
-                    content: Some("Hello".to_string()),
+                    content: "Hello".to_string(),
                 },
                 DebugComponentA {
-                    content: Some("World".to_string()),
+                    content: "World".to_string(),
                 },
             ),
         )
@@ -168,10 +180,10 @@ mod tests {
 
         let input_components = (
             DebugComponentA {
-                content: Some("Hello".to_string()),
+                content: "Hello".to_string(),
             },
             DebugComponentB {
-                content: Some("World".to_string()),
+                content: "World".to_string(),
             },
         );
 
@@ -198,7 +210,7 @@ mod tests {
         let entity = Entity::new();
 
         let input_components = DebugComponentA {
-            content: Some("Hello".to_string()),
+            content: "Hello".to_string(),
         };
 
         conn.write_components::<Json, DebugComponentA>(entity, input_components.clone())
@@ -220,7 +232,7 @@ mod tests {
         let entity = Entity::new();
 
         let component = DebugComponentA {
-            content: Some("Hello".to_string()),
+            content: "Hello".to_string(),
         };
 
         conn.write_components::<Json, DebugComponentA>(entity, component.clone())
