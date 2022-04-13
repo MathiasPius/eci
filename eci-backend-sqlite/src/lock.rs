@@ -1,5 +1,6 @@
 use chrono::{Duration, Utc};
 use eci_core::backend::{LockingBackend, LockingError, LockingMode, ToLockDescriptor};
+use log::*;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::named_params;
@@ -53,6 +54,8 @@ impl LockingBackend for SqliteBackend {
         let lockid = Uuid::new_v4();
 
         let mut conn = self.0.get().map_err(LockingError::implementation)?;
+
+        debug!("starting lock transaction for lock {lockid}");
         let tx = conn.transaction().map_err(LockingError::implementation)?;
 
         for descriptor in T::to_lock_descriptor() {
@@ -64,7 +67,7 @@ impl LockingBackend for SqliteBackend {
                 ":expires": Utc::now() + Duration::hours(1),
             };
 
-            println!(
+            debug!(
                 "acquiring {}-lock for {}({})",
                 descriptor.mode, descriptor.name, descriptor.version
             );
@@ -90,18 +93,26 @@ impl LockingBackend for SqliteBackend {
         }
 
         tx.commit().map_err(LockingError::implementation)?;
+        debug!("lock {lockid} transaction committed");
 
         Ok(SqliteLock(lockid))
     }
 
     fn release_lock(&self, lock: Self::Lock) -> Result<(), eci_core::backend::LockingError> {
         let conn = self.0.get().map_err(LockingError::implementation)?;
-        conn.execute(
-            "delete from locks where lockid = :lockid",
-            named_params! { ":lockid": lock.0.to_string()},
-        )
-        .map_err(LockingError::implementation)?;
+        debug!("releasing lock {lockid}", lockid = lock.0);
 
+        let locks_deleted = conn
+            .execute(
+                "delete from locks where lockid = :lockid",
+                named_params! { ":lockid": lock.0.to_string()},
+            )
+            .map_err(LockingError::implementation)?;
+
+        debug!(
+            "deleted locks on {locks_deleted} resources by releasing {lockid}",
+            lockid = lock.0
+        );
         Ok(())
     }
 }
