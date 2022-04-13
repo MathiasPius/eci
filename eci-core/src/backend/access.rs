@@ -49,12 +49,17 @@ pub trait AccessBackend {
         entity: Entity,
         components: T,
     ) -> Result<(), AccessError>;
+
+    fn read_components<F: Format, T: FromSerializedComponent<F>>(
+        &self,
+        entity: Entity,
+    ) -> Result<T, AccessError>;
 }
 
 pub trait Format: Display {
     type Data: Into<Vec<u8>> + From<Vec<u8>>;
     fn serialize<T: Serialize>(value: T) -> Result<Self::Data, AccessError>;
-    fn deserialize<T: DeserializeOwned>(value: Self::Data) -> Result<T, AccessError>;
+    fn deserialize<T: DeserializeOwned>(value: &Self::Data) -> Result<T, AccessError>;
 }
 
 pub struct SerializedComponent<F: Format> {
@@ -132,5 +137,82 @@ where
         let mut first = (self.0, self.1, self.2, self.3).to_serialized_components()?;
         first.extend(self.4.to_serialized_components()?);
         Ok(first)
+    }
+}
+
+pub struct ComponentExtractionDescriptor {
+    pub name: &'static str,
+    pub version: Version,
+}
+
+pub trait FromSerializedComponent<F: Format>: Sized {
+    fn from_serialized_components(
+        component: &[SerializedComponent<F>],
+    ) -> Result<Self, AccessError>;
+    fn to_component_descriptor() -> Vec<ComponentExtractionDescriptor>;
+}
+
+impl<F, T> FromSerializedComponent<F> for T
+where
+    F: Format,
+    T: Component + DeserializeOwned,
+{
+    fn from_serialized_components(
+        component: &[SerializedComponent<F>],
+    ) -> Result<Self, AccessError> {
+        F::deserialize(&component[0].contents).map_err(AccessError::serialization)
+    }
+
+    fn to_component_descriptor() -> Vec<ComponentExtractionDescriptor> {
+        vec![ComponentExtractionDescriptor {
+            name: T::NAME,
+            version: T::VERSION,
+        }]
+    }
+}
+
+impl<F, A, B> FromSerializedComponent<F> for (A, B)
+where
+    F: Format,
+    A: FromSerializedComponent<F>,
+    B: FromSerializedComponent<F>,
+{
+    fn from_serialized_components(
+        component: &[SerializedComponent<F>],
+    ) -> Result<Self, AccessError> {
+        Ok((
+            A::from_serialized_components(&component[0..1])?,
+            B::from_serialized_components(&component[1..2])?,
+        ))
+    }
+
+    fn to_component_descriptor() -> Vec<ComponentExtractionDescriptor> {
+        let mut first = A::to_component_descriptor();
+        first.extend(B::to_component_descriptor());
+        first
+    }
+}
+
+impl<F, A, B, C> FromSerializedComponent<F> for (A, B, C)
+where
+    F: Format,
+    A: FromSerializedComponent<F>,
+    B: FromSerializedComponent<F>,
+    C: FromSerializedComponent<F>,
+{
+    fn from_serialized_components(
+        component: &[SerializedComponent<F>],
+    ) -> Result<Self, AccessError> {
+        Ok((
+            A::from_serialized_components(&component[0..1])?,
+            B::from_serialized_components(&component[1..2])?,
+            C::from_serialized_components(&component[2..3])?,
+        ))
+    }
+
+    fn to_component_descriptor() -> Vec<ComponentExtractionDescriptor> {
+        let mut first = <(A, B)>::to_component_descriptor();
+        first.extend(C::to_component_descriptor());
+        first
     }
 }

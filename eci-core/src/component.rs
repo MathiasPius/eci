@@ -14,7 +14,7 @@ pub trait Component {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DebugComponentA {
     pub content: Option<String>,
 }
@@ -24,7 +24,7 @@ impl Component for DebugComponentA {
     const VERSION: Version = Version::new(1, 0, 0);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DebugComponentB {
     pub content: Option<String>,
 }
@@ -34,7 +34,7 @@ impl Component for DebugComponentB {
     const VERSION: Version = Version::new(1, 0, 0);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DebugComponentC {
     pub content: Option<String>,
 }

@@ -14,8 +14,8 @@ impl Format for Json {
             .into())
     }
 
-    fn deserialize<T: DeserializeOwned>(value: Self::Data) -> Result<T, AccessError> {
-        let source = String::from_utf8(value).map_err(AccessError::serialization)?;
+    fn deserialize<T: DeserializeOwned>(value: &Self::Data) -> Result<T, AccessError> {
+        let source = String::from_utf8(value.to_vec()).map_err(AccessError::serialization)?;
         serde_json::from_str(&source).map_err(AccessError::serialization)
     }
 }
