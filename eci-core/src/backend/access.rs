@@ -50,7 +50,7 @@ pub trait AccessBackend<F: Format> {
         &self,
         entity: Entity,
         descriptors: Vec<ExtractionDescriptor>,
-    ) -> Result<Vec<SerializedComponent<F>>, AccessError>;
+    ) -> Result<Vec<Option<SerializedComponent<F>>>, AccessError>;
 }
 
 pub trait Format: Display {

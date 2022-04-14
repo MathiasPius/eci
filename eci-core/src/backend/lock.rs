@@ -80,7 +80,6 @@ pub struct LockDescriptor {
     pub mode: LockingMode,
     pub name: String,
 }
-
 /*
 // TODO: It ought to be possible to make this known at compile time...
 pub trait ToLockDescriptor {

@@ -40,7 +40,7 @@ impl<F: Format> AccessBackend<F> for Backend<F> {
         &self,
         entity: Entity,
         descriptors: Vec<ExtractionDescriptor>,
-    ) -> Result<Vec<SerializedComponent<F>>, AccessError> {
+    ) -> Result<Vec<Option<SerializedComponent<F>>>, AccessError> {
         match self {
             Backend::Split { locking: _, access } => access.read_components(entity, descriptors),
             Backend::Joint { backend } => backend.read_components(entity, descriptors),

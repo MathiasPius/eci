@@ -1,7 +1,7 @@
 use eci_core::backend::{
     AccessBackend, AccessError, ExtractionDescriptor, Format, SerializedComponent,
 };
-use rusqlite::named_params;
+use rusqlite::{named_params, OptionalExtension};
 
 use crate::SqliteBackend;
 
@@ -53,7 +53,7 @@ impl<F: Format> AccessBackend<F> for SqliteBackend {
         &self,
         entity: eci_core::Entity,
         descriptors: Vec<ExtractionDescriptor>,
-    ) -> Result<Vec<SerializedComponent<F>>, AccessError> {
+    ) -> Result<Vec<Option<SerializedComponent<F>>>, AccessError> {
         let mut conn = self.0.get().map_err(AccessError::implementation)?;
         let tx = conn.transaction().map_err(AccessError::implementation)?;
 
@@ -81,6 +81,7 @@ impl<F: Format> AccessBackend<F> for SqliteBackend {
                         })
                     },
                 )
+                .optional()
                 .map_err(AccessError::implementation)?,
             );
         }
@@ -197,7 +198,7 @@ mod tests {
         )
         .unwrap();
 
-        let comps: Vec<SerializedComponent<Json>> = conn
+        let comps: Vec<Option<SerializedComponent<Json>>> = conn
             .read_components(
                 entity,
                 vec![
@@ -211,8 +212,8 @@ mod tests {
             )
             .unwrap();
 
-        let ax = Json::deserialize(&comps[0].contents).unwrap();
-        let bx = Json::deserialize(&comps[1].contents).unwrap();
+        let ax = Json::deserialize(&comps[0].as_ref().unwrap().contents).unwrap();
+        let bx = Json::deserialize(&comps[1].as_ref().unwrap().contents).unwrap();
 
         assert_eq!(a, ax);
         assert_eq!(b, bx);
@@ -238,7 +239,7 @@ mod tests {
         )
         .unwrap();
 
-        let comps: Vec<SerializedComponent<Json>> = conn
+        let comps: Vec<Option<SerializedComponent<Json>>> = conn
             .read_components(
                 entity,
                 vec![
@@ -252,8 +253,8 @@ mod tests {
             )
             .unwrap();
 
-        let ax = Json::deserialize(&comps[0].contents).unwrap();
-        let bx = Json::deserialize(&comps[1].contents).unwrap();
+        let ax = Json::deserialize(&comps[0].as_ref().unwrap().contents).unwrap();
+        let bx = Json::deserialize(&comps[1].as_ref().unwrap().contents).unwrap();
 
         assert_eq!(&a, &ax);
         assert_eq!(&a, &bx);
