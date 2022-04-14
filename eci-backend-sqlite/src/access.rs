@@ -1,34 +1,25 @@
-use eci_core::{
-    backend::{
-        AccessBackend, AccessError, ExtractionDescriptor, Format, FromSerializedComponent,
-        SerializedComponent, ToSerializedComponent,
-    },
-    Version,
+use eci_core::backend::{
+    AccessBackend, AccessError, ExtractionDescriptor, Format, SerializedComponent,
 };
 use rusqlite::named_params;
 
 use crate::SqliteBackend;
 
-impl AccessBackend for SqliteBackend {
-    fn write_components<F, T>(
+impl<F: Format> AccessBackend<F> for SqliteBackend {
+    fn write_components(
         &self,
         entity: eci_core::Entity,
-        components: T,
-    ) -> Result<(), AccessError>
-    where
-        F: Format,
-        T: ToSerializedComponent<F>,
-    {
+        components: Vec<SerializedComponent<F>>,
+    ) -> Result<(), AccessError> {
         let mut conn = self.0.get().map_err(AccessError::implementation)?;
         let tx = conn.transaction().map_err(AccessError::implementation)?;
 
-        for descriptor in components.to_serialized_components()? {
+        for descriptor in components {
             let name = descriptor.name;
             let serialized_contents: Vec<u8> = descriptor.contents.into();
 
             let params = named_params! {
                 ":entity": entity.to_string(),
-                ":version": descriptor.version.to_string(),
                 ":contents": serialized_contents,
             };
 
@@ -37,20 +28,20 @@ impl AccessBackend for SqliteBackend {
                 "
             create table if not exists {name} (
                 entity   text not null unique,
-                version  text not null,
                 contents blob not null
             );"
             ))
             .map_err(AccessError::implementation)?;
 
-            if tx.execute(&format!(
-                "insert into {name} (entity, version, contents) values(:entity, :version, :contents)"
-            ), params).map_err(AccessError::implementation)? != 1 {
-                return Err(AccessError::Conflict(
-                    entity,
-                    name,
-                    descriptor.version
-                ))
+            if tx
+                .execute(
+                    &format!("insert into {name} (entity, contents) values(:entity, :contents)"),
+                    params,
+                )
+                .map_err(AccessError::implementation)?
+                != 1
+            {
+                return Err(AccessError::Conflict(entity, name.to_string()));
             };
         }
 
@@ -58,63 +49,52 @@ impl AccessBackend for SqliteBackend {
         Ok(())
     }
 
-    fn read_components<F, T>(&self, entity: eci_core::Entity) -> Result<T, AccessError>
-    where
-        F: Format,
-        T: FromSerializedComponent<F>,
-    {
+    fn read_components(
+        &self,
+        entity: eci_core::Entity,
+        descriptors: Vec<ExtractionDescriptor>,
+    ) -> Result<Vec<SerializedComponent<F>>, AccessError> {
         let mut conn = self.0.get().map_err(AccessError::implementation)?;
         let tx = conn.transaction().map_err(AccessError::implementation)?;
 
         let mut components = Vec::new();
-        for descriptor in T::to_component_descriptor() {
-            components.push(match descriptor {
-                // If the descriptor is for an entity, we just put an empty
-                // serialized component in there. When T::from_serialized_component
-                // is run, it just ignores the SerializedComponent structure entirely
-                // and passes on the input entity.
-                ExtractionDescriptor::Entity => SerializedComponent::<F> {
-                    contents: F::Data::from(vec![]),
-                    name: "",
-                    version: Version::new(1, 0, 0),
-                },
-                ExtractionDescriptor::Component(descriptor) => {
-                    let name = descriptor.name;
+        for descriptor in descriptors {
+            let name = descriptor.name;
 
-                    let params = named_params! {
-                        ":entity": entity.to_string(),
-                        ":version": descriptor.version.to_string(),
-                    };
+            let params = named_params! {
+                ":entity": entity.to_string(),
+            };
 
-                    tx.query_row(
-                        &format!(
-                            "
+            components.push(
+                tx.query_row(
+                    &format!(
+                        "
                     select contents from {name} 
                     where entity = :entity
-                    and version = :version
                 "
-                        ),
-                        params,
-                        |row| {
-                            Ok(SerializedComponent::<F> {
-                                contents: F::Data::from(row.get(0)?),
-                                name,
-                                version: descriptor.version,
-                            })
-                        },
-                    )
-                    .map_err(AccessError::implementation)?
-                }
-            });
+                    ),
+                    params,
+                    |row| {
+                        Ok(SerializedComponent::<F> {
+                            contents: F::Data::from(row.get(0)?),
+                            name,
+                        })
+                    },
+                )
+                .map_err(AccessError::implementation)?,
+            );
         }
 
-        T::from_serialized_components(entity, components.as_slice())
+        Ok(components)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use eci_core::{backend::AccessBackend, Component, Entity};
+    use eci_core::{
+        backend::{AccessBackend, ExtractionDescriptor, Format, SerializedComponent},
+        Component, Entity,
+    };
     use eci_format_json::Json;
     use serde::{Deserialize, Serialize};
 
@@ -140,16 +120,24 @@ mod tests {
         let conn = SqliteBackend::in_memory().unwrap();
         let entity = Entity::new();
 
-        conn.write_components::<Json, (DebugComponentA, DebugComponentB)>(
+        conn.write_components(
             entity,
-            (
-                DebugComponentA {
-                    content: "Hello".to_string(),
+            vec![
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(DebugComponentA {
+                        content: "Hello".to_string(),
+                    })
+                    .unwrap(),
+                    name: "DebugComponentA".to_string(),
                 },
-                DebugComponentB {
-                    content: "World".to_string(),
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(DebugComponentB {
+                        content: "Hello".to_string(),
+                    })
+                    .unwrap(),
+                    name: "DebugComponentB".to_string(),
                 },
-            ),
+            ],
         )
         .unwrap();
     }
@@ -159,16 +147,24 @@ mod tests {
         let conn = SqliteBackend::in_memory().unwrap();
         let entity = Entity::new();
 
-        conn.write_components::<Json, (DebugComponentA, DebugComponentA)>(
+        conn.write_components(
             entity,
-            (
-                DebugComponentA {
-                    content: "Hello".to_string(),
+            vec![
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(DebugComponentA {
+                        content: "Hello".to_string(),
+                    })
+                    .unwrap(),
+                    name: "DebugComponentA".to_string(),
                 },
-                DebugComponentA {
-                    content: "World".to_string(),
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(DebugComponentA {
+                        content: "Hello".to_string(),
+                    })
+                    .unwrap(),
+                    name: "DebugComponentA".to_string(),
                 },
-            ),
+            ],
         )
         .unwrap_err();
     }
@@ -178,28 +174,48 @@ mod tests {
         let conn = SqliteBackend::in_memory().unwrap();
         let entity = Entity::new();
 
-        let input_components = (
-            DebugComponentA {
-                content: "Hello".to_string(),
-            },
-            DebugComponentB {
-                content: "World".to_string(),
-            },
-        );
+        let a = DebugComponentA {
+            content: "Hello".to_string(),
+        };
 
-        conn.write_components::<Json, (DebugComponentA, DebugComponentB)>(
+        let b = DebugComponentB {
+            content: "World".to_string(),
+        };
+
+        conn.write_components(
             entity,
-            input_components.clone(),
+            vec![
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(&a).unwrap(),
+                    name: "DebugComponentA".to_string(),
+                },
+                SerializedComponent::<Json> {
+                    contents: Json::serialize(&b).unwrap(),
+                    name: "DebugComponentB".to_string(),
+                },
+            ],
         )
         .unwrap();
 
-        let comps: (DebugComponentA, DebugComponentB) = conn
-            .read_components::<Json, (DebugComponentA, DebugComponentB)>(entity)
+        let comps: Vec<SerializedComponent<Json>> = conn
+            .read_components(
+                entity,
+                vec![
+                    ExtractionDescriptor {
+                        name: "DebugComponentA".to_string(),
+                    },
+                    ExtractionDescriptor {
+                        name: "DebugComponentB".to_string(),
+                    },
+                ],
+            )
             .unwrap();
 
-        assert_eq!(comps, input_components);
+        let ax = Json::deserialize(&comps[0].contents).unwrap();
+        let bx = Json::deserialize(&comps[1].contents).unwrap();
 
-        println!("{:#?}", comps);
+        assert_eq!(a, ax);
+        assert_eq!(b, bx);
     }
 
     #[test]
@@ -209,40 +225,37 @@ mod tests {
         let conn = SqliteBackend::in_memory().unwrap();
         let entity = Entity::new();
 
-        let input_components = DebugComponentA {
+        let a = DebugComponentA {
             content: "Hello".to_string(),
         };
 
-        conn.write_components::<Json, DebugComponentA>(entity, input_components.clone())
+        conn.write_components(
+            entity,
+            vec![SerializedComponent::<Json> {
+                contents: Json::serialize(&a).unwrap(),
+                name: "DebugComponentA".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let comps: Vec<SerializedComponent<Json>> = conn
+            .read_components(
+                entity,
+                vec![
+                    ExtractionDescriptor {
+                        name: "DebugComponentA".to_string(),
+                    },
+                    ExtractionDescriptor {
+                        name: "DebugComponentA".to_string(),
+                    },
+                ],
+            )
             .unwrap();
 
-        let comps: (DebugComponentA, DebugComponentA) = conn
-            .read_components::<Json, (DebugComponentA, DebugComponentA)>(entity)
-            .unwrap();
+        let ax = Json::deserialize(&comps[0].contents).unwrap();
+        let bx = Json::deserialize(&comps[1].contents).unwrap();
 
-        assert_eq!(comps.0, input_components);
-        assert_eq!(comps.1, input_components);
-
-        println!("{:#?}", comps);
-    }
-
-    #[test]
-    fn read_entity_as_component() {
-        let conn = SqliteBackend::in_memory().unwrap();
-        let entity = Entity::new();
-
-        let component = DebugComponentA {
-            content: "Hello".to_string(),
-        };
-
-        conn.write_components::<Json, DebugComponentA>(entity, component.clone())
-            .unwrap();
-
-        let comps: (Entity, DebugComponentA) = conn
-            .read_components::<Json, (Entity, DebugComponentA)>(entity)
-            .unwrap();
-
-        assert_eq!(entity, comps.0);
-        assert_eq!(component, comps.1);
+        assert_eq!(&a, &ax);
+        assert_eq!(&a, &bx);
     }
 }

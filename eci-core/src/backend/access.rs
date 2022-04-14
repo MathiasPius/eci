@@ -1,15 +1,14 @@
 use std::{error::Error, fmt::Display};
 
-use semver::Version;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{Component, Entity};
+use crate::Entity;
 
 #[derive(Debug)]
 pub enum AccessError {
     Implementation(Box<dyn Error>),
     Serialization(Box<dyn Error>),
-    Conflict(Entity, &'static str, Version),
+    Conflict(Entity, String),
 }
 
 impl Display for AccessError {
@@ -21,11 +20,8 @@ impl Display for AccessError {
             AccessError::Serialization(inner) => {
                 write!(f, "error during serialization: {}", inner)
             }
-            AccessError::Conflict(entity, component, version) => {
-                write!(
-                    f,
-                    "failed to insert {component}({version}) into {entity}'s table"
-                )
+            AccessError::Conflict(entity, component) => {
+                write!(f, "failed to insert {component} into {entity}'s table")
             }
         }
     }
@@ -43,17 +39,18 @@ impl AccessError {
     }
 }
 
-pub trait AccessBackend {
-    fn write_components<F: Format, T: ToSerializedComponent<F>>(
+pub trait AccessBackend<F: Format> {
+    fn write_components(
         &self,
         entity: Entity,
-        components: T,
+        components: Vec<SerializedComponent<F>>,
     ) -> Result<(), AccessError>;
 
-    fn read_components<F: Format, T: FromSerializedComponent<F>>(
+    fn read_components(
         &self,
         entity: Entity,
-    ) -> Result<T, AccessError>;
+        descriptors: Vec<ExtractionDescriptor>,
+    ) -> Result<Vec<SerializedComponent<F>>, AccessError>;
 }
 
 pub trait Format: Display {
@@ -64,10 +61,14 @@ pub trait Format: Display {
 
 pub struct SerializedComponent<F: Format> {
     pub contents: F::Data,
-    pub name: &'static str,
-    pub version: Version,
+    pub name: String,
 }
 
+pub struct ExtractionDescriptor {
+    pub name: String,
+}
+
+/*
 pub trait ToSerializedComponent<F: Format> {
     fn to_serialized_components(self) -> Result<Vec<SerializedComponent<F>>, AccessError>;
 }
@@ -240,3 +241,4 @@ where
         first
     }
 }
+ */

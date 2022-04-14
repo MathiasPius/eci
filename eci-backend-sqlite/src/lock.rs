@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use eci_core::backend::{LockingBackend, LockingError, LockingMode, ToLockDescriptor};
+use eci_core::backend::{Lock, LockDescriptor, LockingBackend, LockingError, LockingMode};
 use log::*;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -16,14 +16,12 @@ select
     :lockid    as lockid,
     :entity    as entity,
     :component as component,
-    :version   as version,
     'write'    as locktype,
     :expires   as expires
 where not exists(
     select entity from locks
     where entity   = :entity
     and component  = :component
-    and version    = :version
     and datetime(current_timestamp) < datetime(expires)
 );";
 
@@ -32,7 +30,6 @@ select
     :lockid    as lockid,
     :entity    as entity,
     :component as component,
-    :version   as version,
     'read'     as locktype,
     :expires   as expires
 where not exists(
@@ -40,38 +37,32 @@ where not exists(
     where locktype = 'write'
     and entity     = :entity
     and component  = :component
-    and version    = :version
     and datetime(current_timestamp) < datetime(expires)
 );";
 
 impl LockingBackend for SqliteBackend {
-    type Lock = SqliteLock;
-
-    fn acquire_lock<T: ToLockDescriptor>(
+    fn acquire_lock(
         &self,
         entity: eci_core::Entity,
+        descriptors: Vec<LockDescriptor>,
         expires_in: std::time::Duration,
-    ) -> Result<Self::Lock, LockingError> {
-        let lockid = Uuid::new_v4();
+    ) -> Result<Lock, LockingError> {
+        let lock = Lock::new();
 
         let mut conn = self.0.get().map_err(LockingError::implementation)?;
 
-        debug!("starting lock transaction for lock {lockid}");
+        debug!("starting lock transaction for lock {lock}");
         let tx = conn.transaction().map_err(LockingError::implementation)?;
 
-        for descriptor in T::to_lock_descriptor() {
+        for descriptor in descriptors {
             let params = named_params! {
-                ":lockid": lockid.to_string(),
+                ":lockid": lock.id(),
                 ":entity": entity.to_string(),
                 ":component": descriptor.name,
-                ":version": descriptor.version.to_string(),
                 ":expires": Utc::now() + Duration::from_std(expires_in).map_err(LockingError::implementation)?,
             };
 
-            debug!(
-                "acquiring {}-lock for {}({})",
-                descriptor.mode, descriptor.name, descriptor.version
-            );
+            debug!("acquiring {}-lock for {}", descriptor.mode, descriptor.name);
 
             if tx
                 .execute(
@@ -87,33 +78,29 @@ impl LockingBackend for SqliteBackend {
                 return Err(LockingError::Conflict(
                     entity,
                     descriptor.name,
-                    descriptor.version,
                     descriptor.mode,
                 ));
             };
         }
 
         tx.commit().map_err(LockingError::implementation)?;
-        debug!("lock {lockid} transaction committed");
+        debug!("lock {lock} transaction committed");
 
-        Ok(SqliteLock(lockid))
+        Ok(lock)
     }
 
-    fn release_lock(&self, lock: Self::Lock) -> Result<(), eci_core::backend::LockingError> {
+    fn release_lock(&self, lock: Lock) -> Result<(), eci_core::backend::LockingError> {
         let conn = self.0.get().map_err(LockingError::implementation)?;
-        debug!("releasing lock {lockid}", lockid = lock.0);
+        debug!("releasing lock {lock}");
 
         let locks_deleted = conn
             .execute(
                 "delete from locks where lockid = :lockid",
-                named_params! { ":lockid": lock.0.to_string()},
+                named_params! { ":lockid": lock.id()},
             )
             .map_err(LockingError::implementation)?;
 
-        debug!(
-            "deleted locks on {locks_deleted} resources by releasing {lockid}",
-            lockid = lock.0
-        );
+        debug!("deleted locks on {locks_deleted} resources by releasing {lock}",);
         Ok(())
     }
 }
@@ -127,7 +114,6 @@ pub(crate) fn create_lock_table(
             lockid    text not null,
             entity    text not null,
             component text not null,
-            version   text not null,
             locktype  text not null,
             expires   text not null
         ) strict;
@@ -138,8 +124,8 @@ pub(crate) fn create_lock_table(
 #[cfg(test)]
 mod tests {
     use eci_core::{
-        backend::{LockingBackend, LockingError, LockingMode},
-        Component, Entity, Version,
+        backend::{LockDescriptor, LockingBackend, LockingError, LockingMode},
+        Component, Entity,
     };
 
     #[derive(Component)]
@@ -160,8 +146,21 @@ mod tests {
 
         let entity = Entity::new();
 
-        conn.acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
-            .unwrap();
+        conn.acquire_lock(
+            entity,
+            vec![
+                LockDescriptor {
+                    mode: LockingMode::Read,
+                    name: "DebugComponentA".to_string(),
+                },
+                LockDescriptor {
+                    mode: LockingMode::Read,
+                    name: "DebugComponentA".to_string(),
+                },
+            ],
+            LOCK_TIME,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -171,13 +170,37 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![
+                    LockDescriptor {
+                        mode: LockingMode::Read,
+                        name: "DebugComponentA".to_string(),
+                    },
+                    LockDescriptor {
+                        mode: LockingMode::Read,
+                        name: "DebugComponentA".to_string(),
+                    },
+                ],
+                LOCK_TIME,
+            )
             .unwrap();
+
         let _b = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
-            .unwrap();
-        let _c = conn
-            .acquire_lock::<(&DebugComponentA, &DebugComponentA)>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![
+                    LockDescriptor {
+                        mode: LockingMode::Read,
+                        name: "DebugComponentA".to_string(),
+                    },
+                    LockDescriptor {
+                        mode: LockingMode::Read,
+                        name: "DebugComponentA".to_string(),
+                    },
+                ],
+                LOCK_TIME,
+            )
             .unwrap();
     }
 
@@ -188,20 +211,29 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![LockDescriptor {
+                    mode: LockingMode::Write,
+                    name: "DebugComponentA".to_string(),
+                }],
+                LOCK_TIME,
+            )
             .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
-                .unwrap_err()
-                .to_string(),
-            LockingError::Conflict(
+            conn.acquire_lock(
                 entity,
-                "DebugComponentA",
-                Version::new(1, 0, 0),
-                LockingMode::Write
+                vec![LockDescriptor {
+                    mode: LockingMode::Write,
+                    name: "DebugComponentA".to_string(),
+                },],
+                LOCK_TIME,
             )
-            .to_string()
+            .unwrap_err()
+            .to_string(),
+            LockingError::Conflict(entity, "DebugComponentA".to_string(), LockingMode::Write)
+                .to_string()
         );
     }
 
@@ -212,10 +244,31 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<(&mut DebugComponentA, &mut DebugComponentB)>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![
+                    LockDescriptor {
+                        mode: LockingMode::Write,
+                        name: "DebugComponentA".to_string(),
+                    },
+                    LockDescriptor {
+                        mode: LockingMode::Write,
+                        name: "DebugComponentB".to_string(),
+                    },
+                ],
+                LOCK_TIME,
+            )
             .unwrap();
+
         let _b = conn
-            .acquire_lock::<&mut DebugComponentC>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![LockDescriptor {
+                    mode: LockingMode::Write,
+                    name: "DebugComponentC".to_string(),
+                }],
+                LOCK_TIME,
+            )
             .unwrap();
     }
 
@@ -226,20 +279,29 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<&DebugComponentA>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![LockDescriptor {
+                    mode: LockingMode::Read,
+                    name: "DebugComponentA".to_string(),
+                }],
+                LOCK_TIME,
+            )
             .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
-                .unwrap_err()
-                .to_string(),
-            LockingError::Conflict(
+            conn.acquire_lock(
                 entity,
-                "DebugComponentA",
-                Version::new(1, 0, 0),
-                LockingMode::Write
+                vec![LockDescriptor {
+                    mode: LockingMode::Write,
+                    name: "DebugComponentA".to_string(),
+                },],
+                LOCK_TIME,
             )
-            .to_string()
+            .unwrap_err()
+            .to_string(),
+            LockingError::Conflict(entity, "DebugComponentA".to_string(), LockingMode::Write)
+                .to_string()
         );
     }
 
@@ -250,20 +312,29 @@ mod tests {
         let entity = Entity::new();
 
         let _a = conn
-            .acquire_lock::<&mut DebugComponentA>(entity, LOCK_TIME)
+            .acquire_lock(
+                entity,
+                vec![LockDescriptor {
+                    mode: LockingMode::Write,
+                    name: "DebugComponentA".to_string(),
+                }],
+                LOCK_TIME,
+            )
             .unwrap();
 
         assert_eq!(
-            conn.acquire_lock::<&DebugComponentA>(entity, LOCK_TIME)
-                .unwrap_err()
-                .to_string(),
-            LockingError::Conflict(
+            conn.acquire_lock(
                 entity,
-                "DebugComponentA",
-                Version::new(1, 0, 0),
-                LockingMode::Read
+                vec![LockDescriptor {
+                    mode: LockingMode::Read,
+                    name: "DebugComponentA".to_string(),
+                },],
+                LOCK_TIME,
             )
-            .to_string()
+            .unwrap_err()
+            .to_string(),
+            LockingError::Conflict(entity, "DebugComponentA".to_string(), LockingMode::Read)
+                .to_string()
         );
     }
 }
