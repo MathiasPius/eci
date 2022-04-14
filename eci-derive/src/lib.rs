@@ -10,7 +10,7 @@ pub fn derive_answer_fn(item: TokenStream) -> TokenStream {
     let name = ident.to_string();
 
     TokenStream::from(quote! {
-        impl Component for #ident {
+        impl eci_component::Component for #ident {
             const COMPONENT_TYPE: &'static str = #name;
         }
     })

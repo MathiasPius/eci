@@ -71,6 +71,7 @@ dependencies = [
 name = "eci-core"
 version = "0.1.0"
 dependencies = [
+ "eci-derive",
  "serde",
  "uuid",
 ]
@@ -90,6 +91,13 @@ dependencies = [
  "eci-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "eci-query"
+version = "0.1.0"
+dependencies = [
+ "eci-core",
 ]
 
 [[package]]
