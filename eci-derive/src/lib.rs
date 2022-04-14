@@ -11,8 +11,7 @@ pub fn derive_answer_fn(item: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl Component for #ident {
-            const NAME: &'static str = #name;
-            const VERSION: eci_core::Version = eci_core::Version::new(1,0,0);
+            const COMPONENT_TYPE: &'static str = #name;
         }
     })
 }

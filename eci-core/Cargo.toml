@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-semver = { version = "1.0.7", features = ["serde"] }
 serde = { version = "*", features = ["derive"]}
 uuid = { version = "0.8.2", features = ["v4", "serde"] }
 eci-derive = { path = "../eci-derive" }
