@@ -7,3 +7,8 @@ edition = "2021"
 
 [dependencies]
 eci-core = { path = "../eci-core" }
+serde = { version = "1.0.136", features = ["derive"] }
+
+[dev-dependencies]
+eci-backend-sqlite = { path = "../eci-backend-sqlite" }
+eci-format-json = { path = "../eci-format-json" }

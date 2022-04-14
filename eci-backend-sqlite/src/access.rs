@@ -1,7 +1,7 @@
 use eci_core::backend::{
     AccessBackend, AccessError, ExtractionDescriptor, Format, SerializedComponent,
 };
-use rusqlite::{named_params, OptionalExtension};
+use rusqlite::{named_params};
 
 use crate::SqliteBackend;
 
@@ -81,8 +81,7 @@ impl<F: Format> AccessBackend<F> for SqliteBackend {
                         })
                     },
                 )
-                .optional()
-                .map_err(AccessError::implementation)?,
+                .ok(),
             );
         }
 

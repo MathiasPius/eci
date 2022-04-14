@@ -97,7 +97,10 @@ dependencies = [
 name = "eci-query"
 version = "0.1.0"
 dependencies = [
+ "eci-backend-sqlite",
  "eci-core",
+ "eci-format-json",
+ "serde",
 ]
 
 [[package]]

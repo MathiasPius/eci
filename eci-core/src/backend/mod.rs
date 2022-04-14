@@ -15,7 +15,7 @@ where
 }
 
 pub enum Backend<F: Format> {
-    Split {
+    Disjoint {
         locking: Box<dyn LockingBackend>,
         access: Box<dyn AccessBackend<F>>,
     },
@@ -31,7 +31,7 @@ impl<F: Format> AccessBackend<F> for Backend<F> {
         components: Vec<SerializedComponent<F>>,
     ) -> Result<(), AccessError> {
         match self {
-            Backend::Split { locking: _, access } => access.write_components(entity, components),
+            Backend::Disjoint { locking: _, access } => access.write_components(entity, components),
             Backend::Joint { backend } => backend.write_components(entity, components),
         }
     }
@@ -42,8 +42,26 @@ impl<F: Format> AccessBackend<F> for Backend<F> {
         descriptors: Vec<ExtractionDescriptor>,
     ) -> Result<Vec<Option<SerializedComponent<F>>>, AccessError> {
         match self {
-            Backend::Split { locking: _, access } => access.read_components(entity, descriptors),
+            Backend::Disjoint { locking: _, access } => access.read_components(entity, descriptors),
             Backend::Joint { backend } => backend.read_components(entity, descriptors),
+        }
+    }
+}
+
+impl<F: Format> Backend<F> {
+    pub fn from_joint<T: JointBackend<F> + 'static>(backend: T) -> Self {
+        Backend::Joint {
+            backend: Box::new(backend),
+        }
+    }
+
+    pub fn from_disjoint<A: AccessBackend<F> + 'static, L: LockingBackend + 'static>(
+        access: A,
+        locking: L,
+    ) -> Self {
+        Backend::Disjoint {
+            access: Box::new(access),
+            locking: Box::new(locking),
         }
     }
 }
