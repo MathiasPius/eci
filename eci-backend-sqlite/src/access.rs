@@ -93,22 +93,22 @@ impl<F: Format> AccessBackend<F> for SqliteBackend {
 mod tests {
     use eci_core::{
         backend::{AccessBackend, ExtractionDescriptor, Format, SerializedComponent},
-        Component, Entity,
+        Entity,
     };
     use eci_format_json::Json;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
     struct DebugComponentA {
         content: String,
     }
 
-    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
     struct DebugComponentB {
         content: String,
     }
 
-    #[derive(Clone, Debug, Component, Serialize, Deserialize, PartialEq, Eq)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
     struct DebugComponentC {
         content: String,
     }

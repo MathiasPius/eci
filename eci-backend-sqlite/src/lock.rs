@@ -125,17 +125,8 @@ pub(crate) fn create_lock_table(
 mod tests {
     use eci_core::{
         backend::{LockDescriptor, LockingBackend, LockingError, LockingMode},
-        Component, Entity,
+        Entity,
     };
-
-    #[derive(Component)]
-    struct DebugComponentA;
-
-    #[derive(Component)]
-    struct DebugComponentB;
-
-    #[derive(Component)]
-    struct DebugComponentC;
 
     use crate::SqliteBackend;
     const LOCK_TIME: std::time::Duration = std::time::Duration::from_secs(60);

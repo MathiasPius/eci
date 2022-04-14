@@ -71,7 +71,6 @@ dependencies = [
 name = "eci-core"
 version = "0.1.0"
 dependencies = [
- "eci-derive",
  "serde",
  "uuid",
 ]
