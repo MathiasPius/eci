@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_acquire_locking() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn allow_multiple_read_locks() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn fail_on_multiple_write_locks() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn allow_multiple_write_locks_on_different_components() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn fail_acquire_write_lock_while_read_locks_exist() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn fail_acquire_read_lock_while_write_locks_exist() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
 
         let entity = Entity::new();
 

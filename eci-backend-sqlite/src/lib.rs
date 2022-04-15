@@ -1,5 +1,7 @@
 mod access;
 mod lock;
+use std::path::Path;
+
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
@@ -16,8 +18,15 @@ impl TryFrom<Pool<SqliteConnectionManager>> for SqliteBackend {
 }
 
 impl SqliteBackend {
-    pub fn in_memory() -> Result<Self, r2d2::Error> {
+    pub fn memory() -> Result<Self, r2d2::Error> {
         let pool = r2d2::Pool::new(SqliteConnectionManager::memory())?;
+
+        lock::create_lock_table(&pool).unwrap();
+        Ok(SqliteBackend(pool))
+    }
+
+    pub fn file<P: AsRef<Path>>(path: P) -> Result<Self, r2d2::Error> {
+        let pool = r2d2::Pool::new(SqliteConnectionManager::file(path))?;
 
         lock::create_lock_table(&pool).unwrap();
         Ok(SqliteBackend(pool))

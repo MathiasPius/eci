@@ -1,7 +1,7 @@
 use eci_core::backend::{
     AccessBackend, AccessError, ExtractionDescriptor, Format, SerializedComponent,
 };
-use rusqlite::{named_params};
+use rusqlite::named_params;
 
 use crate::SqliteBackend;
 
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn insert_disparate_components() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
         let entity = Entity::new();
 
         conn.write_components(
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn fail_on_duplicate_components() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
         let entity = Entity::new();
 
         conn.write_components(
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn read_components() {
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
         let entity = Entity::new();
 
         let a = DebugComponentA {
@@ -222,7 +222,7 @@ mod tests {
     fn read_same_component_twice() {
         // While not exactly useful, there's no real reason why you shouldn't be allowed to
         // read the same component twice within a single query
-        let conn = SqliteBackend::in_memory().unwrap();
+        let conn = SqliteBackend::memory().unwrap();
         let entity = Entity::new();
 
         let a = DebugComponentA {
