@@ -150,46 +150,46 @@ trait Inserter {
     fn insert<F: Format>(self) -> Vec<SerializedComponent<F>>;
 }
 
-trait RefCast<'borrow, 'owned: 'borrow>: 'borrow {
+trait RefCast<'a> {
     type Owned;
-    fn refcast(owned: &'owned mut Self::Owned) -> Self;
+    fn refcast(owned: &'a mut Self::Owned) -> Self;
 }
 
-impl<'borrow, 'owned: 'borrow, A> RefCast<'borrow, 'owned> for &'borrow A {
+impl<'a, A> RefCast<'a> for &'a A {
     type Owned = A;
 
-    fn refcast(a: &'owned mut Self::Owned) -> Self {
+    fn refcast(a: &'a mut Self::Owned) -> Self {
         &*a
     }
 }
 
-impl<'borrow, 'owned: 'borrow, A> RefCast<'borrow, 'owned> for &'borrow mut A {
+impl<'a, A> RefCast<'a> for &'a mut A {
     type Owned = A;
 
-    fn refcast(a: &'owned mut Self::Owned) -> Self {
+    fn refcast(a: &'a mut Self::Owned) -> Self {
         a
     }
 }
 
 macro_rules! borrow_tuple {
     ($vh:ident: $th:ident : $ih:ident) => {
-        impl<'borrow, 'owned: 'borrow, $th, $ih> RefCast<'borrow, 'owned> for ($th,) where
-            $th: RefCast<'borrow, 'owned, Owned = $ih> + 'borrow {
+        impl<'a, $th, $ih> RefCast<'a> for ($th,) where
+            $th: RefCast<'a, Owned = $ih> + 'a {
             type Owned = ($ih,);
 
-            fn refcast((ref mut $vh,): &'owned mut ($th::Owned,)) -> Self {
+            fn refcast((ref mut $vh,): &'a mut ($th::Owned,)) -> Self {
                 ($th::refcast($vh),)
             }
         }
     };
 
     (  $vh:ident: $th:ident : $ih:ident, $($v:ident: $t:ident : $i:ident),+) => {
-        impl<'borrow, 'owned: 'borrow, $th, $( $t ),*, $ih, $( $i ),*> RefCast<'borrow, 'owned> for ($th, $($t),*) where
-            $th: RefCast<'borrow, 'owned, Owned = $ih> + 'borrow,
-            $( $t: RefCast<'borrow, 'owned, Owned = $i> + 'borrow ),* {
+        impl<'a, $th, $( $t ),*, $ih, $( $i ),*> RefCast<'a> for ($th, $($t),*) where
+            $th: RefCast<'a, Owned = $ih> + 'a,
+            $( $t: RefCast<'a, Owned = $i> + 'a ),* {
             type Owned = ($ih, $( $i ),*);
 
-            fn refcast( (ref mut $vh, ref mut $( $v ),*) : &'owned mut ($th::Owned, $( $t::Owned),* )) -> Self {
+            fn refcast( (ref mut $vh, ref mut $( $v ),*) : &'a mut ($th::Owned, $( $t::Owned),* )) -> Self {
                 (
                     ($th::refcast($vh), $( $t::refcast($v) ),*)
                 )
@@ -307,17 +307,17 @@ where
     inner: <T as Extractor>::Owned,
 }
 
-impl<'borrow, 'owned: 'borrow, T> Locked<T>
+impl<'a, T> Locked<T>
 where
     T: Extractor,
-    T: RefCast<'borrow, 'owned, Owned = <T as Extractor>::Owned>,
+    T: RefCast<'a, Owned = <T as Extractor>::Owned>,
 {
     pub fn unlock(mut self) -> Result<(), LockingError> {
         self.lock.unlock()
     }
 
-    pub fn deref(&'owned mut self) -> T {
-        <T as RefCast<'borrow, 'owned>>::refcast(&mut self.inner)
+    pub fn deref(&'a mut self) -> T {
+        <T as RefCast>::refcast(&mut self.inner)
     }
 }
 
@@ -461,15 +461,13 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            lock.deref(),
-            (&CounterA(10), &StringComponent("Hello".to_string()))
-        );
-
-        assert_eq!(
-            lock.deref(),
-            (&CounterA(10), &StringComponent("Hello".to_string()))
-        );
+        {
+            let reference = &mut lock;
+            assert_eq!(
+                reference.deref(),
+                (&CounterA(10), &StringComponent("Hello".to_string()))
+            );
+        };
 
         // Insert collectively
         let b = Entity::new();
