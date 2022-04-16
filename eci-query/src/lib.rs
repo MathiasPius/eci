@@ -1,17 +1,23 @@
-use std::fmt::Debug;
+pub mod extractor;
+pub mod inserter;
+pub mod lock;
+pub mod refcast;
 
 use eci_core::{
     backend::{
-        AccessBackend, AccessError, Backend, BackendError, ExtractionDescriptor, Format, Lock,
-        LockDescriptor, LockingBackend, LockingError, LockingMode, SerializedComponent,
+        AccessBackend, AccessError, Backend, BackendError, Format, LockDescriptor, LockingBackend,
+        LockingMode, SerializedComponent,
     },
     Component, Entity,
 };
 
-use log::debug;
-use serde::{de::DeserializeOwned, Serialize};
+use extractor::Extractor;
+use inserter::Inserter;
+use lock::{DropLock, Locked};
+use refcast::RefCast;
+use serde::de::DeserializeOwned;
 
-trait LockableComponent {
+pub trait LockableComponent {
     type Inner: Component + DeserializeOwned;
     fn as_lock() -> LockDescriptor;
     fn deserialize<F: Format>(
@@ -67,277 +73,10 @@ where
     }
 }
 
-trait Extractor {
-    type Owned;
-    fn describe() -> Vec<LockDescriptor>;
-    fn extract() -> Vec<ExtractionDescriptor>;
-
-    fn from<F: Format>(
-        serialized: Vec<Option<SerializedComponent<F>>>,
-    ) -> Result<Option<Self::Owned>, AccessError>;
-}
-
-macro_rules! impl_extractor {
-    ($head:ident) => {
-        impl<$head> Extractor for $head where
-            $head: LockableComponent,
-        {
-            type Owned = $head::Inner;
-
-            fn describe() -> Vec<LockDescriptor> {
-                vec![
-                    $head::as_lock(),
-                ]
-            }
-
-            fn extract() -> Vec<ExtractionDescriptor> {
-                vec![
-                    ExtractionDescriptor { name: $head::Inner::COMPONENT_TYPE.to_string() },
-                ]
-            }
-
-            fn from<F: Format>(serialized: Vec<Option<SerializedComponent<F>>>) -> Result<Option<Self::Owned>, AccessError> {
-                Ok(<$head as LockableComponent>::deserialize(serialized.into_iter().next().unwrap())?)
-            }
-        }
-    };
-    ($head:ident, $($rest:ident),* ) => {
-        impl<$head, $( $rest ),*> Extractor for ($head, $( $rest ),*) where
-            $head: LockableComponent,
-            $( $rest: LockableComponent),*
-        {
-            type Owned = ($head::Inner, $( $rest::Inner ),*);
-
-            fn describe() -> Vec<LockDescriptor> {
-                vec![
-                    $head::as_lock(),
-                    $( $rest::as_lock() ),*
-                ]
-            }
-
-            fn extract() -> Vec<ExtractionDescriptor> {
-                vec![
-                    ExtractionDescriptor { name: $head::Inner::COMPONENT_TYPE.to_string() },
-                    $( ExtractionDescriptor { name: $rest::Inner::COMPONENT_TYPE.to_string() } ),*
-                ]
-            }
-
-            fn from<F: Format>(serialized: Vec<Option<SerializedComponent<F>>>) -> Result<Option<Self::Owned>, AccessError> {
-                let mut iter = serialized.into_iter();
-                Ok(Some((
-                    if let Some(inner) = <$head as LockableComponent>::deserialize(iter.next().unwrap())? {
-                        inner
-                    } else {
-                        return Ok(None)
-                    },
-                    $(
-                    if let Some(inner) = <$rest as LockableComponent>::deserialize(iter.next().unwrap())? {
-                        inner
-                    } else {
-                        return Ok(None)
-                    } ),*
-                )))
-            }
-        }
-
-        impl_extractor!( $( $rest ),* );
-    };
-}
-
-impl_extractor!(T1, T2, T3, T4, T5, T6, T8, T9, T10, T11, T12, T13, T14, T15, T16);
-
-trait Inserter {
-    fn insert<F: Format>(self) -> Vec<SerializedComponent<F>>;
-}
-
-trait RefCast<'a> {
-    type Owned;
-    fn refcast(owned: &'a mut Self::Owned) -> Self;
-}
-
-impl<'a, A> RefCast<'a> for &'a A {
-    type Owned = A;
-
-    fn refcast(a: &'a mut Self::Owned) -> Self {
-        &*a
-    }
-}
-
-impl<'a, A> RefCast<'a> for &'a mut A {
-    type Owned = A;
-
-    fn refcast(a: &'a mut Self::Owned) -> Self {
-        a
-    }
-}
-
-macro_rules! borrow_tuple {
-    ($vh:ident: $th:ident : $ih:ident) => {
-        impl<'a, $th, $ih> RefCast<'a> for ($th,) where
-            $th: RefCast<'a, Owned = $ih> + 'a {
-            type Owned = ($ih,);
-
-            fn refcast((ref mut $vh,): &'a mut ($th::Owned,)) -> Self {
-                ($th::refcast($vh),)
-            }
-        }
-    };
-
-    (  $vh:ident: $th:ident : $ih:ident, $($v:ident: $t:ident : $i:ident),+) => {
-        impl<'a, $th, $( $t ),*, $ih, $( $i ),*> RefCast<'a> for ($th, $($t),*) where
-            $th: RefCast<'a, Owned = $ih> + 'a,
-            $( $t: RefCast<'a, Owned = $i> + 'a ),* {
-            type Owned = ($ih, $( $i ),*);
-
-            fn refcast( (ref mut $vh, ref mut $( $v ),*) : &'a mut ($th::Owned, $( $t::Owned),* )) -> Self {
-                (
-                    ($th::refcast($vh), $( $t::refcast($v) ),*)
-                )
-            }
-        }
-
-        borrow_tuple!($( $v : $t : $i ),*);
-    };
-}
-
-borrow_tuple!(
-    t1: T1: I1,
-    t2: T2: I2,
-    t3: T3: I3,
-    t4: T4: I4,
-    t5: T5: I5,
-    t6: T6: I6,
-    t7: T7: I7,
-    t8: T8: I8,
-    t9: T9: I9,
-    t10: T10: I10,
-    t11: T11: I11,
-    t12: T12: I12,
-    t13: T13: I13,
-    t14: T14: I14,
-    t15: T15: I15,
-    t16: T16: I16
-);
-
-macro_rules! impl_inserter{
-    ($($v:ident: $T:ident),+) => {
-        impl<$($T: Component + Serialize),+> Inserter for ($($T,)+) {
-            fn insert<F: Format>(self) -> Vec<SerializedComponent<F>> {
-                let ($($v,)+) = self;
-
-                vec![
-                    $(
-                        SerializedComponent {
-                            contents: F::serialize($v).unwrap(),
-                            name: $T::COMPONENT_TYPE.to_string(),
-                        },
-                    )+
-                ]
-            }
-        }
-    }
-}
-
-macro_rules! impl_all_inserter {
-    ($v:ident: $t:ident) => {
-        impl_inserter!($v: $t);
-    };
-    ($vh:ident: $th:ident, $($vr:ident: $tr:ident),*) => {
-        impl_inserter!($vh: $th, $($vr: $tr),+);
-        impl_all_inserter!($($vr: $tr),+);
-    };
-}
-
-impl_all_inserter!(
-    t1: T1,
-    t2: T2,
-    t3: T3,
-    t4: T4,
-    t5: T5,
-    t6: T6,
-    t7: T7,
-    t8: T8,
-    t9: T9,
-    t10: T10,
-    t11: T11,
-    t12: T12,
-    t13: T13,
-    t14: T14,
-    t15: T15,
-    t16: T16
-);
-
-pub struct DropLock {
-    lock: Option<Lock>,
-    backend: Box<dyn LockingBackend>,
-}
-
-impl DropLock {
-    pub fn unlock(mut self) -> Result<(), LockingError> {
-        if let Some(lock) = self.lock.take() {
-            self.backend.release_lock(lock)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl Drop for DropLock {
-    fn drop(&mut self) {
-        if let Some(lock) = self.lock.take() {
-            println!("dropped lock: {lock}");
-            self.backend.release_lock(lock).ok();
-        }
-    }
-}
-
-impl Debug for DropLock {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DropLock")
-            .field("lock", &self.lock)
-            .finish()
-    }
-}
-
-struct Locked<T>
-where
-    T: Extractor,
-{
-    lock: DropLock,
-    inner: <T as Extractor>::Owned,
-}
-
-impl<'a, T> Locked<T>
-where
-    T: Extractor,
-    T: RefCast<'a, Owned = <T as Extractor>::Owned>,
-{
-    pub fn unlock(mut self) -> Result<(), LockingError> {
-        self.lock.unlock()
-    }
-
-    pub fn deref(&'a mut self) -> T {
-        <T as RefCast>::refcast(&mut self.inner)
-    }
-}
-
-impl<T> Debug for Locked<T>
-where
-    T: Extractor,
-    <T as Extractor>::Owned: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Locked")
-            .field("lock", &self.lock)
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
-trait TypedBackend<F: Format> {
-    fn get<Select>(&self, entity: Entity) -> Result<Option<Locked<Select>>, BackendError>
+pub trait TypedBackend<F: Format> {
+    fn get<'a, Select>(&self, entity: Entity) -> Result<Option<Locked<Select>>, BackendError>
     where
-        Select: Extractor;
+        Select: Extractor + RefCast<'a, Owned = <Select as Extractor>::Owned>;
 
     fn put<T>(&self, entity: Entity, components: T) -> Result<(), AccessError>
     where
@@ -345,9 +84,9 @@ trait TypedBackend<F: Format> {
 }
 
 impl<F: Format> TypedBackend<F> for Backend<F> {
-    fn get<Select>(&self, entity: Entity) -> Result<Option<Locked<Select>>, BackendError>
+    fn get<'a, Select>(&self, entity: Entity) -> Result<Option<Locked<Select>>, BackendError>
     where
-        Select: Extractor,
+        Select: Extractor + RefCast<'a, Owned = <Select as Extractor>::Owned>,
     {
         let components = Select::from(self.read_components(entity, Select::extract())?)?;
 
@@ -358,13 +97,10 @@ impl<F: Format> TypedBackend<F> for Backend<F> {
                 std::time::Duration::from_secs(3600),
             )?;
 
-            Ok(Some(Locked {
-                inner: components,
-                lock: DropLock {
-                    lock: Some(lock),
-                    backend: Box::new((*self).clone()),
-                },
-            }))
+            Ok(Some(Locked::new(
+                DropLock::new(lock, Box::new((*self).clone())),
+                components,
+            )))
         } else {
             Ok(None)
         }
