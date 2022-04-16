@@ -3,6 +3,7 @@ use std::fmt::Display;
 use eci_core::backend::{AccessError, Format};
 use serde::{de::DeserializeOwned, Serialize};
 
+#[derive(Clone)]
 pub struct Json;
 
 impl Format for Json {

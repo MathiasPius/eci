@@ -53,7 +53,7 @@ pub trait AccessBackend<F: Format> {
     ) -> Result<Vec<Option<SerializedComponent<F>>>, AccessError>;
 }
 
-pub trait Format: Display {
+pub trait Format: Display + Clone + 'static {
     type Data: Into<Vec<u8>> + From<Vec<u8>>;
     fn serialize<T: Serialize>(value: T) -> Result<Self::Data, AccessError>;
     fn deserialize<T: DeserializeOwned>(value: &Self::Data) -> Result<T, AccessError>;

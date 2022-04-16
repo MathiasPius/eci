@@ -1,5 +1,7 @@
 mod access;
 mod lock;
+use std::{error::Error, fmt::Display, sync::Arc};
+
 pub use access::*;
 pub use lock::*;
 
@@ -14,13 +16,14 @@ where
 {
 }
 
+#[derive(Clone)]
 pub enum Backend<F: Format> {
     Disjoint {
-        locking: Box<dyn LockingBackend>,
-        access: Box<dyn AccessBackend<F>>,
+        locking: Arc<dyn LockingBackend>,
+        access: Arc<dyn AccessBackend<F>>,
     },
     Joint {
-        backend: Box<dyn JointBackend<F>>,
+        backend: Arc<dyn JointBackend<F>>,
     },
 }
 
@@ -48,10 +51,33 @@ impl<F: Format> AccessBackend<F> for Backend<F> {
     }
 }
 
+impl<F: Format> LockingBackend for Backend<F> {
+    fn acquire_lock(
+        &self,
+        entity: Entity,
+        descriptors: Vec<LockDescriptor>,
+        expires_in: std::time::Duration,
+    ) -> Result<Lock, LockingError> {
+        match self {
+            Backend::Disjoint { locking, access: _ } => {
+                locking.acquire_lock(entity, descriptors, expires_in)
+            }
+            Backend::Joint { backend } => backend.acquire_lock(entity, descriptors, expires_in),
+        }
+    }
+
+    fn release_lock(&self, lock: Lock) -> Result<(), LockingError> {
+        match self {
+            Backend::Disjoint { locking, access: _ } => locking.release_lock(lock),
+            Backend::Joint { backend } => backend.release_lock(lock),
+        }
+    }
+}
+
 impl<F: Format> Backend<F> {
     pub fn from_joint<T: JointBackend<F> + 'static>(backend: T) -> Self {
         Backend::Joint {
-            backend: Box::new(backend),
+            backend: Arc::new(backend),
         }
     }
 
@@ -60,8 +86,37 @@ impl<F: Format> Backend<F> {
         locking: L,
     ) -> Self {
         Backend::Disjoint {
-            access: Box::new(access),
-            locking: Box::new(locking),
+            access: Arc::new(access),
+            locking: Arc::new(locking),
         }
     }
 }
+
+#[derive(Debug)]
+pub enum BackendError {
+    Access(AccessError),
+    Locking(LockingError),
+}
+
+impl From<LockingError> for BackendError {
+    fn from(locking: LockingError) -> Self {
+        BackendError::Locking(locking)
+    }
+}
+
+impl From<AccessError> for BackendError {
+    fn from(access: AccessError) -> Self {
+        BackendError::Access(access)
+    }
+}
+
+impl Display for BackendError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BackendError::Access(access) => write!(f, "access error {}", access),
+            BackendError::Locking(locking) => write!(f, "locking error {}", locking),
+        }
+    }
+}
+
+impl Error for BackendError {}

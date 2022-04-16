@@ -32,3 +32,20 @@ impl SqliteBackend {
         Ok(SqliteBackend(pool))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn dotest() {
+        struct Test(i32);
+
+        impl Test {
+            fn get(&mut self) -> &mut i32 {
+                &mut self.0
+            }
+        }
+
+        let mut test = Test(10);
+        let lol = test.get();
+    }
+}
